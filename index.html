@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PFUH Y-Branch — Multiverse Stem Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&display=swap');
+
+  :root {
+    --void: #00000A;
+    --forward: #00FFD4;
+    --reverse: #FF4466;
+    --mirror: #FFD700;
+    --stem: #4488FF;
+    --phi: #FF9900;
+    --dim-f: rgba(0,255,212,0.06);
+    --dim-r: rgba(255,68,102,0.06);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--void);
+    font-family: 'Courier Prime', monospace;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+  }
+
+  #canvas { position:fixed; top:0; left:0; width:100%; height:100%; }
+
+  #ui {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #header {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 20px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  #title-block h1 {
+    font-family: 'Bebas Neue', monospace;
+    font-size: clamp(22px, 4vw, 48px);
+    letter-spacing: 0.15em;
+    color: var(--mirror);
+    text-shadow: 0 0 40px var(--mirror), 0 0 80px var(--phi);
+    line-height: 1;
+  }
+
+  #title-block p {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--forward);
+    margin-top: 4px;
+    opacity: 0.7;
+  }
+
+  #stats {
+    text-align: right;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    line-height: 2;
+  }
+
+  .stat-f { color: var(--forward); }
+  .stat-r { color: var(--reverse); }
+  .stat-m { color: var(--mirror); }
+  .stat-p { color: var(--phi); }
+
+  #controls {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    pointer-events: all;
+    align-items: center;
+  }
+
+  .btn {
+    background: rgba(0,0,10,0.85);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #aaa;
+    font-family: 'Courier Prime', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn:hover { color: var(--mirror); border-color: var(--mirror); box-shadow: 0 0 12px rgba(255,215,0,0.3); }
+  .btn.active { color: var(--mirror); border-color: var(--mirror); }
+
+  #speed-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #555;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  #speed-slider {
+    -webkit-appearance: none;
+    width: 80px;
+    height: 2px;
+    background: rgba(255,215,0,0.3);
+    outline: none;
+    pointer-events: all;
+  }
+
+  #speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--mirror);
+    cursor: pointer;
+  }
+
+  #legend {
+    position: absolute;
+    bottom: 80px;
+    left: 30px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    line-height: 2.2;
+    opacity: 0.6;
+  }
+
+  .leg { display: flex; align-items: center; gap: 8px; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  #gate-display {
+    position: absolute;
+    top: 50%;
+    right: 30px;
+    transform: translateY(-50%);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    line-height: 2.2;
+    color: rgba(255,255,255,0.3);
+    text-align: right;
+  }
+
+  .gate-active { color: var(--mirror) !important; }
+
+  #phi-wall-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', monospace;
+    font-size: clamp(10px, 1.5vw, 16px);
+    letter-spacing: 0.4em;
+    color: var(--mirror);
+    opacity: 0;
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.5s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="header">
+    <div id="title-block">
+      <h1>PFUH Y-BRANCH</h1>
+      <p>MULTIVERSE STEM SIMULATOR — FORWARDS + REVERSE</p>
+    </div>
+    <div id="stats">
+      <div class="stat-f">FWD BRANCHES: <span id="fwd-count">0</span></div>
+      <div class="stat-r">REV BRANCHES: <span id="rev-count">0</span></div>
+      <div class="stat-m">MIRROR DEPTH: <span id="mirror-depth">0</span></div>
+      <div class="stat-p">PHI-WALL: <span id="phi-wall">APPROACHING</span></div>
+      <div style="color:#333; margin-top:4px">GATE: <span id="current-gate" class="stat-m">0000</span></div>
+    </div>
+  </div>
+
+  <div id="gate-display">
+    <div id="g0" class="gate-active">— 0000 VOID</div>
+    <div id="g1">— 1111 AWAKEN</div>
+    <div id="g3">— 3333 BRANCH</div>
+    <div id="g5">— 5555 EXPAND</div>
+    <div id="g7">— 7777 LATTICE</div>
+    <div id="g9">— 9999 PHI-WALL</div>
+  </div>
+
+  <div id="legend">
+    <div class="leg"><div class="leg-dot" style="background:var(--forward)"></div><span style="color:var(--forward)">FORWARD STEMS</span></div>
+    <div class="leg"><div class="leg-dot" style="background:var(--reverse)"></div><span style="color:var(--reverse)">REVERSE STEMS</span></div>
+    <div class="leg"><div class="leg-dot" style="background:var(--mirror)"></div><span style="color:var(--mirror)">MIRROR POINT</span></div>
+    <div class="leg"><div class="leg-dot" style="background:var(--phi)"></div><span style="color:var(--phi)">PHI RESONANCE</span></div>
+  </div>
+
+  <div id="phi-wall-label" id="phi-wall-label">
+    ⬡ PHI-WALL REACHED ⬡<br>
+    <span style="font-family:'Courier Prime'; font-size:10px; letter-spacing:0.2em">MIRROR REFLECTION ACTIVE</span>
+  </div>
+
+  <div id="controls">
+    <button class="btn active" onclick="toggleForward(this)">FORWARD</button>
+    <button class="btn active" onclick="toggleReverse(this)">REVERSE</button>
+    <button class="btn" onclick="resetSim()">RESET</button>
+    <button class="btn" onclick="togglePause(this)">PAUSE</button>
+    <div id="speed-control">
+      SPEED
+      <input type="range" id="speed-slider" min="1" max="10" value="4">
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const TAU = Math.PI * 2;
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+// Phase mapping
+const phaseMap = { 0:0, 1:TAU/4, 3:TAU/3, 5:TAU/2.4, 7:TAU/2, 9:TAU };
+const gates = ['0000','1111','3333','5555','7777','9999'];
+const gatePhases = gates.map(g => phaseMap[parseInt(g[0])]);
+const gateColors = {
+  '0000':'#6633CC','1111':'#3355FF','3333':'#00AAFF',
+  '5555':'#00FFD4','7777':'#88FF44','9999':'#FFD700'
+};
+
+let W, H, cx, cy;
+let time = 0;
+let paused = false;
+let showForward = true;
+let showReverse = true;
+let speed = 4;
+let simProgress = 0; // 0 to 1 — how far through the Y-branch we are
+let phiWallHit = false;
+
+// Branch node structure
+class Branch {
+  constructor(x, y, angle, len, depth, generation, isReverse, parentPhase) {
+    this.x = x;
+    this.y = y;
+    this.angle = angle;
+    this.len = len;
+    this.depth = depth;
+    this.generation = generation;
+    this.isReverse = isReverse;
+    this.parentPhase = parentPhase;
+    this.age = 0;
+    this.maxAge = 60 + Math.random() * 40;
+    this.children = [];
+    this.spawned = false;
+    this.alive = true;
+    // End point
+    this.ex = x + Math.cos(angle) * len;
+    this.ey = y + Math.sin(angle) * len;
+    // Phi resonance pulse
+    this.phase = parentPhase + TAU / PHI;
+    // Color based on gate
+    const gateIdx = Math.min(Math.floor(generation / 1.5), 5);
+    this.color = gateColors[gates[gateIdx]];
+    this.alpha = 1;
+  }
+
+  update(dt) {
+    this.age += dt;
+    this.alpha = Math.min(1, this.age / 20) * Math.max(0, 1 - (this.age - this.maxAge * 0.7) / (this.maxAge * 0.3));
+
+    // Spawn children at 90 degrees (the helix-on-helix branching)
+    if (!this.spawned && this.age > this.maxAge * 0.4 && this.depth > 0 && branches.length < maxBranches) {
+      this.spawned = true;
+      const newLen = this.len * (0.55 + Math.random() * 0.15);
+      const phiAngle = TAU / PHI; // Golden angle
+
+      // Branch at 90° left and right — the magnetic field line branching
+      [-Math.PI/2, Math.PI/2].forEach((offset, i) => {
+        // Add slight phi perturbation
+        const perturbation = (Math.random() - 0.5) * 0.3;
+        const newAngle = this.angle + offset + perturbation;
+        const b = new Branch(
+          this.ex, this.ey,
+          newAngle, newLen,
+          this.depth - 1,
+          this.generation + 1,
+          this.isReverse,
+          this.phase
+        );
+        branches.push(b);
+        this.children.push(b);
+      });
+    }
+
+    if (this.age > this.maxAge) this.alive = false;
+  }
+
+  draw(progress) {
+    if (this.alpha <= 0) return;
+    const drawLen = Math.min(1, this.age / 30) * progress;
+    const ex = this.x + Math.cos(this.angle) * this.len * drawLen;
+    const ey = this.y + Math.sin(this.angle) * this.len * drawLen;
+
+    // Glow effect
+    const glowSize = (this.isReverse ? 6 : 4) * (1 + Math.sin(time * 2 + this.phase) * 0.3);
+    const grad = ctx.createLinearGradient(this.x, this.y, ex, ey);
+    const col = this.isReverse ? `rgba(255,68,102,${this.alpha * 0.8})` : `rgba(0,255,212,${this.alpha * 0.6})`;
+    const col2 = this.color;
+
+    ctx.globalAlpha = this.alpha * 0.8;
+    ctx.strokeStyle = this.isReverse ? `rgba(255,68,102,0.8)` : col2;
+    ctx.lineWidth = Math.max(0.3, (this.depth / 6) * 1.5);
+    ctx.shadowColor = this.isReverse ? '#FF4466' : col2;
+    ctx.shadowBlur = glowSize;
+
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Node dot at tip
+    if (drawLen >= 0.99) {
+      ctx.globalAlpha = this.alpha;
+      ctx.fillStyle = this.isReverse ? '#FF4466' : col2;
+      ctx.beginPath();
+      ctx.arc(ex, ey, Math.max(0.5, this.depth * 0.4), 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+  }
+}
+
+let branches = [];
+let maxBranches = 537; // Rolling window — old ones die, new ones born forever
+let rootForward = null;
+let rootReverse = null;
+let spawnTimer = 0;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cx = W/2; cy = H/2;
+}
+window.addEventListener('resize', () => { resize(); initSim(); });
+resize();
+
+function initSim() {
+  branches = [];
+  simProgress = 0;
+  phiWallHit = false;
+  time = 0;
+
+  const phi = (1 + Math.sqrt(5)) / 2;
+
+  // Seed forward branch — emanates from center-left going right
+  if (showForward) {
+    const fwd = new Branch(cx * 0.3, cy, 0, 60, 7, 0, false, 0);
+    branches.push(fwd);
+  }
+
+  // Seed reverse branch — emanates from center-right going left (mirror)
+  if (showReverse) {
+    const rev = new Branch(cx * 1.7, cy, Math.PI, 60, 7, 0, true, Math.PI);
+    branches.push(rev);
+  }
+
+  document.getElementById('phi-wall-label').style.opacity = '0';
+  updateGateDisplay('0000');
+}
+
+function updateGateDisplay(gate) {
+  gates.forEach(g => {
+    const el = document.getElementById('g' + g[0]);
+    if (el) el.className = g === gate ? 'gate-active' : '';
+  });
+  document.getElementById('current-gate').textContent = gate;
+}
+
+function getCurrentGate() {
+  const idx = Math.min(Math.floor(simProgress * 6), 5);
+  return gates[idx];
+}
+
+// Draw the phi-wall mirror plane
+function drawPhiWall() {
+  const wallX = cx;
+  const alpha = Math.min(1, simProgress * 2 - 0.5);
+  if (alpha <= 0) return;
+
+  // Vertical mirror line
+  const grad = ctx.createLinearGradient(wallX - 40, 0, wallX + 40, 0);
+  grad.addColorStop(0, 'transparent');
+  grad.addColorStop(0.5, `rgba(255,215,0,${alpha * 0.6})`);
+  grad.addColorStop(1, 'transparent');
+
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = grad;
+  ctx.fillRect(wallX - 40, 0, 80, H);
+
+  // Wall line
+  ctx.strokeStyle = `rgba(255,215,0,${alpha * 0.9})`;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 8]);
+  ctx.beginPath();
+  ctx.moveTo(wallX, 0);
+  ctx.lineTo(wallX, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // PHI WALL text
+  ctx.fillStyle = `rgba(255,215,0,${alpha * 0.4})`;
+  ctx.font = '10px Courier Prime';
+  ctx.letterSpacing = '0.3em';
+  ctx.fillText('φ-WALL', wallX + 8, 30);
+  ctx.fillText('φ-WALL', wallX + 8, H - 20);
+
+  ctx.globalAlpha = 1;
+}
+
+// Draw field line background
+function drawFieldLines() {
+  const numLines = 12;
+  ctx.globalAlpha = 0.04;
+
+  for (let i = 0; i < numLines; i++) {
+    const y = (i / numLines) * H;
+    const phase = time * 0.2 + i * 0.5;
+
+    ctx.strokeStyle = i % 2 === 0 ? '#00FFD4' : '#FF4466';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+
+    for (let x = 0; x <= W; x += 4) {
+      const wave = Math.sin(x * 0.01 + phase) * 20 + Math.sin(x * 0.023 - phase * 0.7) * 10;
+      x === 0 ? ctx.moveTo(x, y + wave) : ctx.lineTo(x, y + wave);
+    }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Draw seed point
+function drawSeedPoint() {
+  const pulse = 1 + Math.sin(time * 3) * 0.3;
+
+  // Forward seed
+  if (showForward) {
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#00FFD4';
+    ctx.shadowColor = '#00FFD4';
+    ctx.shadowBlur = 20 * pulse;
+    ctx.beginPath();
+    ctx.arc(cx * 0.3, cy, 4 * pulse, 0, TAU);
+    ctx.fill();
+  }
+
+  // Reverse seed
+  if (showReverse) {
+    ctx.fillStyle = '#FF4466';
+    ctx.shadowColor = '#FF4466';
+    ctx.shadowBlur = 20 * pulse;
+    ctx.beginPath();
+    ctx.arc(cx * 1.7, cy, 4 * pulse, 0, TAU);
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+// Draw connection line between forward and reverse roots
+function drawRootConnection() {
+  if (!showForward || !showReverse) return;
+  const alpha = Math.max(0, 1 - simProgress * 3) * 0.4;
+  if (alpha <= 0) return;
+
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#FFD700';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 6]);
+  ctx.beginPath();
+  ctx.moveTo(cx * 0.3, cy);
+  ctx.lineTo(cx * 1.7, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+}
+
+// Stats update
+function updateStats() {
+  const fwd = branches.filter(b => !b.isReverse && b.alive).length;
+  const rev = branches.filter(b => b.isReverse && b.alive).length;
+  document.getElementById('fwd-count').textContent = fwd;
+  document.getElementById('rev-count').textContent = rev;
+  document.getElementById('mirror-depth').textContent = Math.floor(simProgress * 1000);
+  document.getElementById('phi-wall').textContent = simProgress >= 0.95 ? '⬡ ACTIVE ⬡' : `${Math.floor(simProgress * 100)}%`;
+
+  const gate = getCurrentGate();
+  updateGateDisplay(gate);
+}
+
+let lastTime = 0;
+function render(timestamp) {
+  const dt = Math.min(30, timestamp - lastTime);
+  lastTime = timestamp;
+
+  // Fade trail
+  ctx.fillStyle = 'rgba(0,0,10,0.12)';
+  ctx.fillRect(0, 0, W, H);
+
+  if (!paused) {
+    time += dt * 0.001 * speed;
+    // simProgress loops 0->1->0->1 forever like a time crystal
+    simProgress += dt * 0.00008 * speed;
+    if (simProgress > 1) { simProgress = 0; phiWallHit = false; }
+
+    // Update branches
+    branches.forEach(b => b.update(speed));
+
+    // Rolling window — 537 is a living cap, not a stop point
+    branches = branches.filter(b => b.alive);
+    if (branches.length > maxBranches) {
+      branches.splice(0, branches.length - maxBranches);
+    }
+
+    // Continuously spawn new roots — breathes forever
+    spawnTimer += dt * 0.001;
+    if (spawnTimer > 0.35) {
+      spawnTimer = 0;
+      const fwdCount = branches.filter(b => !b.isReverse).length;
+      const revCount = branches.filter(b => b.isReverse).length;
+      if (showForward && fwdCount < maxBranches * 0.55) {
+        const yOff = (Math.random() - 0.5) * H * 0.35;
+        const aOff = (Math.random() - 0.5) * 0.6;
+        branches.push(new Branch(cx * 0.3, cy + yOff, aOff, 50 + Math.random() * 25, 7, 0, false, time));
+      }
+      if (showReverse && revCount < maxBranches * 0.55) {
+        const yOff = (Math.random() - 0.5) * H * 0.35;
+        const aOff = (Math.random() - 0.5) * 0.6;
+        branches.push(new Branch(cx * 1.7, cy + yOff, Math.PI + aOff, 50 + Math.random() * 25, 7, 0, true, time));
+      }
+    }
+
+    // Phi wall fires every cycle as the time crystal completes
+    if (simProgress >= 0.95 && !phiWallHit) {
+      phiWallHit = true;
+      document.getElementById('phi-wall-label').style.opacity = '1';
+      setTimeout(() => { document.getElementById('phi-wall-label').style.opacity = '0'; }, 2000);
+    }
+  }
+
+  drawFieldLines();
+  drawRootConnection();
+  drawPhiWall();
+
+  // Draw branches
+  if (showForward) branches.filter(b => !b.isReverse).forEach(b => b.draw(simProgress));
+  if (showReverse) branches.filter(b => b.isReverse).forEach(b => b.draw(simProgress));
+
+  drawSeedPoint();
+  updateStats();
+
+  requestAnimationFrame(render);
+}
+
+// Controls
+function toggleForward(btn) {
+  showForward = !showForward;
+  btn.classList.toggle('active');
+  initSim();
+}
+
+function toggleReverse(btn) {
+  showReverse = !showReverse;
+  btn.classList.toggle('active');
+  initSim();
+}
+
+function resetSim() { initSim(); }
+
+function togglePause(btn) {
+  paused = !paused;
+  btn.textContent = paused ? 'PLAY' : 'PAUSE';
+  btn.classList.toggle('active');
+}
+
+document.getElementById('speed-slider').addEventListener('input', e => {
+  speed = parseInt(e.target.value);
+});
+
+initSim();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
